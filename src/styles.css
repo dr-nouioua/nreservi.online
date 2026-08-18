@@ -1,5 +1,15 @@
 @import "tailwindcss" source("../");
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+}
+
+:root.dark {
+  color-scheme: dark;
+}
+
 body {
   @apply m-0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
@@ -7,6 +17,69 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dark body,
+.dark .bg-stone-50 {
+  background-color: #11100f;
+  color: #f5f5f4;
+}
+
+.dark .bg-white {
+  background-color: #1c1917;
+}
+
+.dark .bg-stone-100 {
+  background-color: #292524;
+}
+
+.dark .bg-stone-200 {
+  background-color: #44403c;
+}
+
+.dark .text-stone-950,
+.dark .text-stone-900,
+.dark .text-stone-800,
+.dark .text-stone-700 {
+  color: #fafaf9;
+}
+
+.dark .text-stone-600,
+.dark .text-stone-500,
+.dark .text-stone-400 {
+  color: #d6d3d1;
+}
+
+.dark .border-stone-100,
+.dark .border-stone-200,
+.dark .border-stone-300 {
+  border-color: #44403c;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  border-color: #57534e;
+  background-color: #292524;
+  color: #fafaf9;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #a8a29e;
+}
+
+.dark .shadow-sm,
+.dark .shadow-lg {
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.25);
 }
 
 code {

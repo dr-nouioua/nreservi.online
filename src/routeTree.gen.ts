@@ -22,6 +22,8 @@ import { Route as OwnerAuthedSettingsRouteImport } from './routes/owner/_authed.
 import { Route as OwnerAuthedMenuRouteImport } from './routes/owner/_authed.menu'
 import { Route as OwnerAuthedMarketingRouteImport } from './routes/owner/_authed.marketing'
 import { Route as OwnerAuthedAnalyticsRouteImport } from './routes/owner/_authed.analytics'
+import { Route as AdminAuthedSubscriptionsRouteImport } from './routes/admin/_authed.subscriptions'
+import { Route as AdminAuthedSettingsRouteImport } from './routes/admin/_authed.settings'
 import { Route as AdminAuthedOnboardRouteImport } from './routes/admin/_authed.onboard'
 import { Route as OwnerAuthedSettingsWhatsappRouteImport } from './routes/owner/_authed.settings_.whatsapp'
 
@@ -90,6 +92,17 @@ const OwnerAuthedAnalyticsRoute = OwnerAuthedAnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => OwnerAuthedRoute,
 } as any)
+const AdminAuthedSubscriptionsRoute =
+  AdminAuthedSubscriptionsRouteImport.update({
+    id: '/subscriptions',
+    path: '/subscriptions',
+    getParentRoute: () => AdminAuthedRoute,
+  } as any)
+const AdminAuthedSettingsRoute = AdminAuthedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AdminAuthedRoute,
+} as any)
 const AdminAuthedOnboardRoute = AdminAuthedOnboardRouteImport.update({
   id: '/onboard',
   path: '/onboard',
@@ -111,6 +124,8 @@ export interface FileRoutesByFullPath {
   '/owner/login': typeof OwnerLoginRoute
   '/restaurants/$slug': typeof RestaurantsSlugRoute
   '/admin/onboard': typeof AdminAuthedOnboardRoute
+  '/admin/settings': typeof AdminAuthedSettingsRoute
+  '/admin/subscriptions': typeof AdminAuthedSubscriptionsRoute
   '/owner/analytics': typeof OwnerAuthedAnalyticsRoute
   '/owner/marketing': typeof OwnerAuthedMarketingRoute
   '/owner/menu': typeof OwnerAuthedMenuRoute
@@ -126,6 +141,8 @@ export interface FileRoutesByTo {
   '/owner/login': typeof OwnerLoginRoute
   '/restaurants/$slug': typeof RestaurantsSlugRoute
   '/admin/onboard': typeof AdminAuthedOnboardRoute
+  '/admin/settings': typeof AdminAuthedSettingsRoute
+  '/admin/subscriptions': typeof AdminAuthedSubscriptionsRoute
   '/owner/analytics': typeof OwnerAuthedAnalyticsRoute
   '/owner/marketing': typeof OwnerAuthedMarketingRoute
   '/owner/menu': typeof OwnerAuthedMenuRoute
@@ -144,6 +161,8 @@ export interface FileRoutesById {
   '/owner/login': typeof OwnerLoginRoute
   '/restaurants/$slug': typeof RestaurantsSlugRoute
   '/admin/_authed/onboard': typeof AdminAuthedOnboardRoute
+  '/admin/_authed/settings': typeof AdminAuthedSettingsRoute
+  '/admin/_authed/subscriptions': typeof AdminAuthedSubscriptionsRoute
   '/owner/_authed/analytics': typeof OwnerAuthedAnalyticsRoute
   '/owner/_authed/marketing': typeof OwnerAuthedMarketingRoute
   '/owner/_authed/menu': typeof OwnerAuthedMenuRoute
@@ -163,6 +182,8 @@ export interface FileRouteTypes {
     | '/owner/login'
     | '/restaurants/$slug'
     | '/admin/onboard'
+    | '/admin/settings'
+    | '/admin/subscriptions'
     | '/owner/analytics'
     | '/owner/marketing'
     | '/owner/menu'
@@ -178,6 +199,8 @@ export interface FileRouteTypes {
     | '/owner/login'
     | '/restaurants/$slug'
     | '/admin/onboard'
+    | '/admin/settings'
+    | '/admin/subscriptions'
     | '/owner/analytics'
     | '/owner/marketing'
     | '/owner/menu'
@@ -195,6 +218,8 @@ export interface FileRouteTypes {
     | '/owner/login'
     | '/restaurants/$slug'
     | '/admin/_authed/onboard'
+    | '/admin/_authed/settings'
+    | '/admin/_authed/subscriptions'
     | '/owner/_authed/analytics'
     | '/owner/_authed/marketing'
     | '/owner/_authed/menu'
@@ -307,6 +332,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OwnerAuthedAnalyticsRouteImport
       parentRoute: typeof OwnerAuthedRoute
     }
+    '/admin/_authed/subscriptions': {
+      id: '/admin/_authed/subscriptions'
+      path: '/subscriptions'
+      fullPath: '/admin/subscriptions'
+      preLoaderRoute: typeof AdminAuthedSubscriptionsRouteImport
+      parentRoute: typeof AdminAuthedRoute
+    }
+    '/admin/_authed/settings': {
+      id: '/admin/_authed/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminAuthedSettingsRouteImport
+      parentRoute: typeof AdminAuthedRoute
+    }
     '/admin/_authed/onboard': {
       id: '/admin/_authed/onboard'
       path: '/onboard'
@@ -326,11 +365,15 @@ declare module '@tanstack/react-router' {
 
 interface AdminAuthedRouteChildren {
   AdminAuthedOnboardRoute: typeof AdminAuthedOnboardRoute
+  AdminAuthedSettingsRoute: typeof AdminAuthedSettingsRoute
+  AdminAuthedSubscriptionsRoute: typeof AdminAuthedSubscriptionsRoute
   AdminAuthedIndexRoute: typeof AdminAuthedIndexRoute
 }
 
 const AdminAuthedRouteChildren: AdminAuthedRouteChildren = {
   AdminAuthedOnboardRoute: AdminAuthedOnboardRoute,
+  AdminAuthedSettingsRoute: AdminAuthedSettingsRoute,
+  AdminAuthedSubscriptionsRoute: AdminAuthedSubscriptionsRoute,
   AdminAuthedIndexRoute: AdminAuthedIndexRoute,
 }
 

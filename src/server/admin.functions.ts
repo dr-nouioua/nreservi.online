@@ -1,11 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { restaurants, restaurantOwners, reservations, areas } from "../../db/schema.js";
+import { platformSettings, restaurants, restaurantOwners, restaurantSubscriptions, reservations, areas } from "../../db/schema.js";
 import { requireSession } from "./auth.functions.js";
 import { hashPassword } from "./crypto.server.js";
 import { signSession } from "./session.server.js";
 import { setCookie } from "@tanstack/react-start/server";
+import { deriveSubscriptionStatus, todayIso } from "./subscription.server.js";
 
 async function requireAdmin() {
   const session = await requireSession();
@@ -15,14 +16,31 @@ async function requireAdmin() {
 
 export const listAllRestaurants = createServerFn({ method: "GET" }).handler(async () => {
   await requireAdmin();
-  return db.select().from(restaurants).orderBy(restaurants.id);
+  const rows = await db.select().from(restaurants).orderBy(restaurants.id);
+  return rows.map((restaurant) => ({
+    ...restaurant,
+    openingHours: restaurant.openingHours as Record<string, Array<{ open: string; close: string }>>,
+  }));
 });
 
 export const getPlatformAnalytics = createServerFn({ method: "GET" }).handler(async () => {
   await requireAdmin();
   const allRestaurants = await db.select().from(restaurants);
+  const allSubscriptions = await db.select().from(restaurantSubscriptions);
   const allReservations = await db.select().from(reservations);
-  const active = allRestaurants.filter((r) => r.status === "active").length;
+  const today = todayIso();
+  const active = allRestaurants.filter((restaurant) => {
+    const periods = allSubscriptions
+      .filter((period) => period.restaurantId === restaurant.id)
+      .sort((left, right) => right.endDate.localeCompare(left.endDate));
+    const current = periods.find((period) => period.startDate <= today && period.endDate >= today) ?? periods[0];
+    return deriveSubscriptionStatus({
+      restaurantStatus: restaurant.status,
+      startDate: current?.startDate,
+      endDate: current?.endDate,
+      today,
+    }).active;
+  }).length;
   const pending = allRestaurants.filter((r) => r.status === "pending").length;
   const byRestaurant: Record<string, number> = {};
   for (const r of allReservations) {
@@ -70,6 +88,72 @@ export const setSubscriptionTier = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireAdmin();
     await db.update(restaurants).set({ subscriptionTier: data.tier }).where(eq(restaurants.id, data.id));
+    return { success: true };
+  });
+
+export const getSubscriptions = createServerFn({ method: "GET" }).handler(async () => {
+  await requireAdmin();
+  const restaurantRows = await db.select().from(restaurants).orderBy(restaurants.name);
+  const periods = await db.select().from(restaurantSubscriptions).orderBy(desc(restaurantSubscriptions.endDate));
+  const today = todayIso();
+  return restaurantRows.map((restaurant) => {
+    const history = periods.filter((period) => period.restaurantId === restaurant.id);
+    const current = history.find((period) => period.startDate <= today && period.endDate >= today) ?? history[0] ?? null;
+    return {
+      restaurant: {
+        id: restaurant.id,
+        name: restaurant.name,
+        status: restaurant.status,
+      },
+      current,
+      history,
+      ...deriveSubscriptionStatus({
+        restaurantStatus: restaurant.status,
+        startDate: current?.startDate,
+        endDate: current?.endDate,
+        today,
+      }),
+    };
+  });
+});
+
+export const createSubscription = createServerFn({ method: "POST" })
+  .inputValidator((data: { restaurantId: number; startDate: string; endDate: string }) => data)
+  .handler(async ({ data }) => {
+    await requireAdmin();
+    if (!data.startDate || !data.endDate || data.endDate < data.startDate) throw new Error("Invalid subscription period");
+    const [restaurant] = await db.select().from(restaurants).where(eq(restaurants.id, data.restaurantId));
+    if (!restaurant) throw new Error("Restaurant not found");
+    const [subscription] = await db.insert(restaurantSubscriptions).values(data).returning();
+    if (restaurant.status === "suspended") {
+      await db.update(restaurants).set({ status: "active" }).where(eq(restaurants.id, data.restaurantId));
+    }
+    return subscription;
+  });
+
+export const updateSubscription = createServerFn({ method: "POST" })
+  .inputValidator((data: { id: number; startDate: string; endDate: string }) => data)
+  .handler(async ({ data }) => {
+    await requireAdmin();
+    if (!data.startDate || !data.endDate || data.endDate < data.startDate) throw new Error("Invalid subscription period");
+    await db.update(restaurantSubscriptions).set({ startDate: data.startDate, endDate: data.endDate }).where(eq(restaurantSubscriptions.id, data.id));
+    return { success: true };
+  });
+
+export const getAppearanceSettings = createServerFn({ method: "GET" }).handler(async () => {
+  await requireAdmin();
+  const [settings] = await db.select().from(platformSettings).where(eq(platformSettings.id, 1));
+  return { darkModeEnabled: settings?.darkModeEnabled ?? false };
+});
+
+export const saveAppearanceSettings = createServerFn({ method: "POST" })
+  .inputValidator((data: { darkModeEnabled: boolean }) => data)
+  .handler(async ({ data }) => {
+    await requireAdmin();
+    await db.insert(platformSettings).values({ id: 1, darkModeEnabled: data.darkModeEnabled }).onConflictDoUpdate({
+      target: platformSettings.id,
+      set: { darkModeEnabled: data.darkModeEnabled, updatedAt: new Date() },
+    });
     return { success: true };
   });
 
@@ -126,7 +210,20 @@ export const onboardRestaurant = createServerFn({ method: "POST" })
       name: data.ownerName,
     });
 
-    return restaurant;
+    const startDate = todayIso();
+    const end = new Date(`${startDate}T00:00:00Z`);
+    end.setUTCFullYear(end.getUTCFullYear() + 1);
+    end.setUTCDate(end.getUTCDate() - 1);
+    await db.insert(restaurantSubscriptions).values({
+      restaurantId: restaurant.id,
+      startDate,
+      endDate: end.toISOString().slice(0, 10),
+    });
+
+    return {
+      ...restaurant,
+      openingHours: restaurant.openingHours as Record<string, Array<{ open: string; close: string }>>,
+    };
   });
 
 // Support-login: lets the super-admin impersonate a restaurant's owner dashboard for troubleshooting.

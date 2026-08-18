@@ -1,12 +1,11 @@
 # nreservi.online — Multi-Service Reservation Platform
 
-nreservi.online is a full-stack, multi-tenant reservation platform. The customer-facing interface is
-French-first ("Mes réservations"); the owner and admin dashboards are unchanged. It supports four roles:
+nreservi.online is a full-stack, multi-tenant reservation platform with a French-first (`fr-DZ`) interface.
+It supports three main audiences:
 
 - **Customers** — browse restaurants, check real-time availability, book a table as a guest (phone number only), and manage their reservations.
-- **Restaurant owners / staff** — a live reservation board, floor-plan view, analytics, menu management, restaurant settings, and WhatsApp-based marketing automation.
-- **Platform super-admin** — onboard restaurants, approve/suspend accounts, manage subscription tiers, view cross-restaurant analytics, and support-login into any restaurant's dashboard.
-- **Marketing engine** — automation rules that send WhatsApp campaigns to customer segments (lapsed guests, birthdays, VIPs, no-show win-back) and track delivery/read/booked performance.
+- **Restaurant owners / staff** — a mobile-first reservation board, floor-plan view, analytics, menu management, settings, and manually initiated WhatsApp marketing.
+- **Platform super-admin** — onboard restaurants, manage date-based subscriptions and appearance settings, view cross-restaurant analytics, and support-login into a restaurant dashboard.
 
 ## Tech stack
 
@@ -82,14 +81,17 @@ To upgrade to V2 (official Business API, automatic sending), add a `mode: "cloud
 `src/services/whatsapp.ts` and replace `logWhatsappHandoff` with a real send — the reservation flow and the
 template contract stay unchanged.
 
-**Marketing/automated messages (mocked).** Real WhatsApp Business Platform (Meta Cloud API) or Twilio
-integration requires an approved business account and credentials this environment doesn't have. The
-marketing campaigns and scheduled reminders instead call `sendWhatsappMessage()` in
-`src/server/whatsapp.server.ts`, which logs the message to the `whatsapp_messages` table so the UI can show
-real delivery status. `netlify/functions/whatsapp-webhook.mts` is a ready-made inbound webhook handler that
-parses CANCEL/CONFIRM/STOP replies; point a real provider's webhook at it and swap the mock sender for an
-actual API call once credentials (`WHATSAPP_API_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, or Twilio equivalents)
-are available.
+**Marketing messages are manual too.** The owner selects only customers tied to their restaurant, writes a
+campaign, reviews a personalized preview, then opens each conversation through a WhatsApp deep link. The
+campaign history records that nreservi prepared the handoff; it never claims delivery and never sends on the
+owner's behalf. Scheduled reservation reminders remain on the documented mock provider seam.
+
+## Subscription access
+
+The admin manages subscription periods under `/admin/subscriptions`. Access is derived from the current date
+on every protected owner server call. Expired or manually suspended restaurants keep all data but cannot read
+or mutate protected owner resources until a valid renewal period is assigned. Public booking creation is also
+blocked while the restaurant subscription is invalid.
 
 ## Project structure
 
