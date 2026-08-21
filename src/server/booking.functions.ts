@@ -13,6 +13,14 @@ import {
 import { ensureSeeded } from "./seed.server.js";
 import { sendWhatsappMessage } from "./whatsapp.server.js";
 import { randomToken } from "./session.server.js";
+import { getRestaurantAccess, requireActiveRestaurant } from "./subscription.server.js";
+
+function serializeRestaurant<T extends typeof restaurants.$inferSelect>(restaurant: T) {
+  return {
+    ...restaurant,
+    openingHours: restaurant.openingHours as Record<string, Array<{ open: string; close: string }>>,
+  };
+}
 
 export const listRestaurants = createServerFn({ method: "GET" })
   .inputValidator((data: { q?: string; city?: string; cuisine?: string } | undefined) => data)
@@ -22,12 +30,14 @@ export const listRestaurants = createServerFn({ method: "GET" })
     const q = data?.q?.toLowerCase();
     const city = data?.city?.toLowerCase();
     const cuisine = data?.cuisine?.toLowerCase();
-    return all.filter((r) => {
+    const filtered = all.filter((r) => {
       if (q && !r.name.toLowerCase().includes(q) && !r.cuisine.toLowerCase().includes(q)) return false;
       if (city && r.city.toLowerCase() !== city) return false;
       if (cuisine && r.cuisine.toLowerCase() !== cuisine) return false;
       return true;
     });
+    const access = await Promise.all(filtered.map((restaurant) => getRestaurantAccess(restaurant.id)));
+    return filtered.filter((_, index) => access[index]?.active).map(serializeRestaurant);
   });
 
 export const getRestaurantBySlug = createServerFn({ method: "GET" })
@@ -41,7 +51,7 @@ export const getRestaurantBySlug = createServerFn({ method: "GET" })
     const categoryRows = await db.select().from(menuCategories).where(eq(menuCategories.restaurantId, restaurant.id));
     const itemRows = await db.select().from(menuItems).where(eq(menuItems.restaurantId, restaurant.id));
     return {
-      restaurant,
+      restaurant: serializeRestaurant(restaurant),
       areas: areaRows,
       tables: tableRows,
       menu: categoryRows.map((c) => ({ ...c, items: itemRows.filter((i) => i.categoryId === c.id) })),
@@ -91,6 +101,11 @@ export const createReservation = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data }) => {
+    try {
+      await requireActiveRestaurant(data.restaurantId);
+    } catch {
+      return { error: "Les réservations en ligne sont temporairement indisponibles pour cet établissement." };
+    }
     const tableRows = await db.select().from(tables).where(eq(tables.restaurantId, data.restaurantId));
     const suitable = tableRows.filter(
       (t) => t.capacity >= data.partySize && (!data.areaId || t.areaId === data.areaId),
@@ -151,20 +166,34 @@ export const createReservation = createServerFn({ method: "POST" })
       });
     }
 
-    return { reservation, restaurant };
+    return { reservation, restaurant: restaurant ? serializeRestaurant(restaurant) : null };
   });
 
 export const lookupReservations = createServerFn({ method: "GET" })
   .inputValidator((data: { phone: string }) => data)
   .handler(async ({ data }) => {
-    const [customer] = await db.select().from(customers).where(eq(customers.phone, data.phone));
+    const [customer] = await db.select({
+      id: customers.id,
+      phone: customers.phone,
+      name: customers.name,
+      email: customers.email,
+      whatsappOptIn: customers.whatsappOptIn,
+      birthday: customers.birthday,
+      createdAt: customers.createdAt,
+    }).from(customers).where(eq(customers.phone, data.phone));
     if (!customer) return { customer: null, reservations: [] };
     const rows = await db
       .select({ reservation: reservations, restaurant: restaurants })
       .from(reservations)
       .innerJoin(restaurants, eq(reservations.restaurantId, restaurants.id))
       .where(eq(reservations.customerId, customer.id));
-    return { customer, reservations: rows };
+    return {
+      customer,
+      reservations: rows.map((row) => ({
+        reservation: row.reservation,
+        restaurant: serializeRestaurant(row.restaurant),
+      })),
+    };
   });
 
 export const cancelReservation = createServerFn({ method: "POST" })

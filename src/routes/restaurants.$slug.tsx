@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { formatDzd } from '../services/locale'
 import { useState } from 'react'
 import { CalendarDays, CheckCircle2, Clock, ImagePlus, MapPin, Sparkles, Star, Users } from 'lucide-react'
 import { getRestaurantBySlug, getAvailability, createReservation } from '../server/booking.functions'
@@ -147,7 +148,7 @@ function RestaurantPage() {
                               <p className={item.available ? 'font-medium text-stone-800' : 'font-medium text-stone-400 line-through'}>{item.name}</p>
                               <p className="text-stone-500">{item.description}</p>
                             </div>
-                            <span className="shrink-0 font-semibold text-stone-900">${item.price}</span>
+                            <span className="shrink-0 font-semibold text-stone-900">{formatDzd(item.price)}</span>
                           </div>
                         </li>
                       ))}

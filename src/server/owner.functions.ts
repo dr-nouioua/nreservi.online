@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import {
   reservations,
@@ -9,30 +9,47 @@ import {
   menuCategories,
   menuItems,
   customers,
-  marketingSegments,
   marketingTemplates,
   marketingRules,
-  campaignLogs,
   whatsappMessages,
+  marketingCampaigns,
+  marketingCampaignRecipients,
 } from "../../db/schema.js";
 import { requireSession } from "./auth.functions.js";
-import { sendWhatsappMessage, renderTemplate } from "./whatsapp.server.js";
 import { randomToken } from "./session.server.js";
+import { getRestaurantAccess } from "./subscription.server.js";
+import { requireRestaurantId } from "./owner-access.server.js";
 
-export async function requireRestaurantId(): Promise<number> {
+export const getOwnerAccess = createServerFn({ method: "GET" }).handler(async () => {
   const session = await requireSession();
-  if (!session || (session.role !== "owner" && session.role !== "staff")) {
-    throw new Error("Not authorized");
-  }
-  return session.restaurantId;
-}
+  if (!session || (session.role !== "owner" && session.role !== "staff")) throw new Error("Not authorized");
+  const access = await getRestaurantAccess(session.restaurantId);
+  return {
+    session,
+    access: access ? {
+      active: access.active,
+      status: access.status,
+      daysRemaining: access.daysRemaining,
+      restaurantName: access.restaurant.name,
+      startDate: access.subscription?.startDate ?? null,
+      endDate: access.subscription?.endDate ?? null,
+    } : null,
+  };
+});
 
 export const getOwnerOverview = createServerFn({ method: "GET" }).handler(async () => {
   const restaurantId = await requireRestaurantId();
   const [restaurant] = await db.select().from(restaurants).where(eq(restaurants.id, restaurantId));
   const areaRows = await db.select().from(areas).where(eq(areas.restaurantId, restaurantId));
   const tableRows = await db.select().from(tables).where(eq(tables.restaurantId, restaurantId));
-  return { restaurant, areas: areaRows, tables: tableRows };
+  return {
+    restaurant: restaurant ? {
+      ...restaurant,
+      openingHours: restaurant.openingHours as Record<string, Array<{ open: string; close: string }>>,
+    } : null,
+    areas: areaRows,
+    tables: tableRows,
+  };
 });
 
 export const listReservationsForDate = createServerFn({ method: "GET" })
@@ -51,6 +68,8 @@ export const updateReservationStatus = createServerFn({ method: "POST" })
   .inputValidator((data: { id: number; status: string }) => data)
   .handler(async ({ data }) => {
     const restaurantId = await requireRestaurantId();
+    const allowedStatuses = new Set(["pending", "confirmed", "seated", "completed", "no_show", "cancelled"]);
+    if (!allowedStatuses.has(data.status)) throw new Error("Invalid reservation status");
     await db
       .update(reservations)
       .set({ status: data.status, updatedAt: new Date() })
@@ -82,7 +101,8 @@ export const createWalkIn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const restaurantId = await requireRestaurantId();
-    const [table] = await db.select().from(tables).where(eq(tables.id, data.tableId));
+    const [table] = await db.select().from(tables).where(and(eq(tables.id, data.tableId), eq(tables.restaurantId, restaurantId)));
+    if (!table) throw new Error("Table not found");
     const [reservation] = await db
       .insert(reservations)
       .values({
@@ -193,6 +213,8 @@ export const addTable = createServerFn({ method: "POST" })
   .inputValidator((data: { areaId: number; label: string; capacity: number; shape: string }) => data)
   .handler(async ({ data }) => {
     const restaurantId = await requireRestaurantId();
+    const [area] = await db.select().from(areas).where(and(eq(areas.id, data.areaId), eq(areas.restaurantId, restaurantId)));
+    if (!area) throw new Error("Area not found");
     const [table] = await db
       .insert(tables)
       .values({
@@ -235,6 +257,11 @@ export const addMenuItem = createServerFn({ method: "POST" })
   .inputValidator((data: { categoryId: number; name: string; description: string; price: string; photoUrl?: string }) => data)
   .handler(async ({ data }) => {
     const restaurantId = await requireRestaurantId();
+    const [category] = await db.select().from(menuCategories).where(and(
+      eq(menuCategories.id, data.categoryId),
+      eq(menuCategories.restaurantId, restaurantId),
+    ));
+    if (!category) throw new Error("Menu category not found");
     const [item] = await db
       .insert(menuItems)
       .values({
@@ -263,24 +290,43 @@ export const toggleMenuItemAvailability = createServerFn({ method: "POST" })
 
 export const getMarketing = createServerFn({ method: "GET" }).handler(async () => {
   const restaurantId = await requireRestaurantId();
-  const segments = await db.select().from(marketingSegments).where(eq(marketingSegments.restaurantId, restaurantId));
-  const templates = await db.select().from(marketingTemplates).where(eq(marketingTemplates.restaurantId, restaurantId));
-  const rules = await db.select().from(marketingRules).where(eq(marketingRules.restaurantId, restaurantId));
-  const logs = await db
-    .select({ log: campaignLogs, customer: customers, template: marketingTemplates })
-    .from(campaignLogs)
-    .innerJoin(customers, eq(campaignLogs.customerId, customers.id))
-    .leftJoin(marketingTemplates, eq(campaignLogs.templateId, marketingTemplates.id))
-    .where(eq(campaignLogs.restaurantId, restaurantId));
-
-  const perf = {
-    sent: logs.length,
-    delivered: logs.filter((l) => ["delivered", "read", "booked"].includes(l.log.status)).length,
-    read: logs.filter((l) => ["read", "booked"].includes(l.log.status)).length,
-    booked: logs.filter((l) => l.log.status === "booked").length,
+  const [restaurant] = await db.select().from(restaurants).where(eq(restaurants.id, restaurantId));
+  const reservationRows = await db
+    .select({ reservation: reservations, customer: customers })
+    .from(reservations)
+    .innerJoin(customers, eq(reservations.customerId, customers.id))
+    .where(and(eq(reservations.restaurantId, restaurantId), eq(customers.whatsappOptIn, true)))
+    .orderBy(desc(reservations.date));
+  const audience = new Map<number, { id: number; name: string; phone: string; lastReservationDate: string; reservationCount: number; reservationDates: string[] }>();
+  for (const row of reservationRows) {
+    const current = audience.get(row.customer.id);
+    if (current) {
+      current.reservationCount += 1;
+      current.reservationDates.push(row.reservation.date);
+    }
+    else audience.set(row.customer.id, {
+      id: row.customer.id,
+      name: row.customer.name || row.reservation.guestName,
+      phone: row.customer.phone,
+      lastReservationDate: row.reservation.date,
+      reservationCount: 1,
+      reservationDates: [row.reservation.date],
+    });
+  }
+  const campaigns = await db
+    .select()
+    .from(marketingCampaigns)
+    .where(eq(marketingCampaigns.restaurantId, restaurantId))
+    .orderBy(desc(marketingCampaigns.createdAt), desc(marketingCampaigns.id));
+  return {
+    restaurant: restaurant ? {
+      id: restaurant.id,
+      name: restaurant.name,
+      whatsappNumber: restaurant.whatsappNumber,
+    } : null,
+    customers: Array.from(audience.values()),
+    campaigns,
   };
-
-  return { segments, templates, rules, logs, perf };
 });
 
 export const addMarketingTemplate = createServerFn({ method: "POST" })
@@ -316,58 +362,70 @@ export const addMarketingRule = createServerFn({ method: "POST" })
     return rule;
   });
 
-// Runs each active rule against its segment's matching customers and sends
-// the WhatsApp template to everyone who is opted in. In production this
-// would be triggered by a scheduled function (see netlify/functions/marketing-cron.ts).
-export const runMarketingRuleNow = createServerFn({ method: "POST" })
-  .inputValidator((data: { ruleId: number }) => data)
+export const createMarketingCampaign = createServerFn({ method: "POST" })
+  .inputValidator((data: {
+    name: string;
+    audienceKind: string;
+    audienceLabel: string;
+    message: string;
+    customerIds: number[];
+  }) => data)
   .handler(async ({ data }) => {
     const restaurantId = await requireRestaurantId();
-    const [rule] = await db.select().from(marketingRules).where(eq(marketingRules.id, data.ruleId));
-    if (!rule || rule.restaurantId !== restaurantId) throw new Error("Rule not found");
-    const [template] = await db.select().from(marketingTemplates).where(eq(marketingTemplates.id, rule.templateId));
-    if (!template) throw new Error("Template not found");
-
-    const restRes = await db
-      .select({ reservation: reservations, customer: customers })
+    const name = data.name.trim();
+    const message = data.message.trim();
+    if (!name || !message) throw new Error("Campaign name and message are required");
+    const uniqueIds = Array.from(new Set(data.customerIds));
+    if (!uniqueIds.length) throw new Error("Select at least one customer");
+    const allowed = await db
+      .select({ customerId: reservations.customerId })
       .from(reservations)
-      .innerJoin(customers, eq(reservations.customerId, customers.id))
-      .where(and(eq(reservations.restaurantId, restaurantId), eq(customers.whatsappOptIn, true)));
+      .where(and(eq(reservations.restaurantId, restaurantId), inArray(reservations.customerId, uniqueIds)));
+    const allowedIds = new Set(allowed.map((row) => row.customerId).filter((id): id is number => id !== null));
+    if (uniqueIds.some((id) => !allowedIds.has(id))) throw new Error("Customer not available for this restaurant");
+    const [campaign] = await db.insert(marketingCampaigns).values({
+      restaurantId,
+      name,
+      audienceKind: data.audienceKind,
+      audienceLabel: data.audienceLabel,
+      message,
+      selectedCount: uniqueIds.length,
+      status: "draft",
+    }).returning();
+    await db.insert(marketingCampaignRecipients).values(uniqueIds.map((customerId) => ({
+      campaignId: campaign.id,
+      restaurantId,
+      customerId,
+    })));
+    return campaign;
+  });
 
-    const uniqueCustomers = new Map<number, { id: number; name: string | null; phone: string; lastVisit: string }>();
-    for (const row of restRes) {
-      const existing = uniqueCustomers.get(row.customer.id);
-      if (!existing || row.reservation.date > existing.lastVisit) {
-        uniqueCustomers.set(row.customer.id, {
-          id: row.customer.id,
-          name: row.customer.name,
-          phone: row.customer.phone,
-          lastVisit: row.reservation.date,
-        });
-      }
-    }
-
-    const targets = Array.from(uniqueCustomers.values()).slice(0, 10);
-    let sent = 0;
-    for (const target of targets) {
-      const offerCode = `SAVE${Math.floor(Math.random() * 900 + 100)}`;
-      const body = renderTemplate(template.body, {
-        name: target.name ?? "there",
-        last_visit_date: target.lastVisit,
-        offer_code: offerCode,
-      });
-      await sendWhatsappMessage({ restaurantId, customerId: target.id, kind: "marketing", body });
-      await db.insert(campaignLogs).values({
+export const logMarketingHandoff = createServerFn({ method: "POST" })
+  .inputValidator((data: { campaignId: number; customerId: number; body: string }) => data)
+  .handler(async ({ data }) => {
+    const restaurantId = await requireRestaurantId();
+    const [recipient] = await db.select().from(marketingCampaignRecipients).where(and(
+      eq(marketingCampaignRecipients.campaignId, data.campaignId),
+      eq(marketingCampaignRecipients.customerId, data.customerId),
+      eq(marketingCampaignRecipients.restaurantId, restaurantId),
+    ));
+    if (!recipient) throw new Error("Campaign recipient not found");
+    if (!recipient.preparedAt) {
+      await db.update(marketingCampaignRecipients).set({ preparedAt: new Date() }).where(eq(marketingCampaignRecipients.id, recipient.id));
+      await db.update(marketingCampaigns).set({
+        preparedCount: sql`${marketingCampaigns.preparedCount} + 1`,
+        status: "initiated",
+      }).where(and(eq(marketingCampaigns.id, data.campaignId), eq(marketingCampaigns.restaurantId, restaurantId)));
+      await db.insert(whatsappMessages).values({
         restaurantId,
-        ruleId: rule.id,
-        customerId: target.id,
-        templateId: template.id,
-        status: "sent",
+        customerId: data.customerId,
+        direction: "outbound",
+        kind: "marketing",
+        body: data.body.slice(0, 4000),
+        status: "prepared",
       });
-      sent++;
     }
-
-    return { sent };
+    return { success: true };
   });
 
 export const getWhatsappLog = createServerFn({ method: "GET" }).handler(async () => {

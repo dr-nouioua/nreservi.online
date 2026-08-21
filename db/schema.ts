@@ -22,6 +22,12 @@ export const adminUsers = pgTable("admin_users", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const platformSettings = pgTable("platform_settings", {
+  id: integer("id").primaryKey().default(1),
+  darkModeEnabled: boolean("dark_mode_enabled").notNull().default(false),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // ---------- Restaurants ----------
 
 export const restaurants = pgTable("restaurants", {
@@ -51,6 +57,14 @@ export const restaurantOwners = pgTable("restaurant_owners", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const restaurantSubscriptions = pgTable("restaurant_subscriptions", {
+  id: serial().primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurants.id),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -176,6 +190,31 @@ export const campaignLogs = pgTable("campaign_logs", {
   status: text("status").notNull().default("sent"), // sent | delivered | read | booked | opted_out | failed
   sentAt: timestamp("sent_at").defaultNow(),
 });
+
+export const marketingCampaigns = pgTable("marketing_campaigns", {
+  id: serial().primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurants.id),
+  name: text("name").notNull(),
+  audienceKind: text("audience_kind").notNull(),
+  audienceLabel: text("audience_label").notNull(),
+  message: text("message").notNull(),
+  selectedCount: integer("selected_count").notNull().default(0),
+  preparedCount: integer("prepared_count").notNull().default(0),
+  status: text("status").notNull().default("draft"), // draft | initiated
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const marketingCampaignRecipients = pgTable(
+  "marketing_campaign_recipients",
+  {
+    id: serial().primaryKey(),
+    campaignId: integer("campaign_id").notNull().references(() => marketingCampaigns.id),
+    restaurantId: integer("restaurant_id").notNull().references(() => restaurants.id),
+    customerId: integer("customer_id").notNull().references(() => customers.id),
+    preparedAt: timestamp("prepared_at"),
+  },
+  (table) => [unique("marketing_campaign_recipient_key").on(table.campaignId, table.customerId)],
+);
 
 // ---------- WhatsApp message log ----------
 

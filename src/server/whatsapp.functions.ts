@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { restaurants, whatsappTemplates, whatsappMessages, reservations } from "../../db/schema.js";
-import { requireRestaurantId } from "./owner.functions.js";
+import { requireRestaurantId } from "./owner-access.server.js";
 import {
   DEFAULT_WHATSAPP_TEMPLATES,
   WHATSAPP_TEMPLATE_KINDS,

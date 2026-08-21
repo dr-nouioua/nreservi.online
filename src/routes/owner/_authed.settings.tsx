@@ -10,6 +10,7 @@ export const Route = createFileRoute('/owner/_authed/settings')({
 })
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
+const DAY_LABELS: Record<(typeof DAYS)[number], string> = { mon: 'Lun', tue: 'Mar', wed: 'Mer', thu: 'Jeu', fri: 'Ven', sat: 'Sam', sun: 'Dim' }
 
 function SettingsPage() {
   const initial = Route.useLoaderData()
@@ -73,17 +74,17 @@ function SettingsPage() {
       return
     }
     setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' })
-    setPasswordMessage('Password updated.')
+    setPasswordMessage('Mot de passe mis à jour.')
   }
 
   return (
-    <div className="p-6 lg:p-8 max-w-5xl space-y-6">
+    <div className="w-full space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-sm font-medium text-amber-700">Workspace</p>
-          <h1 className="text-3xl font-bold text-stone-950 tracking-tight">Restaurant settings</h1>
+          <p className="text-sm font-medium text-amber-700">Espace professionnel</p>
+          <h1 className="text-3xl font-bold text-stone-950 tracking-tight">Paramètres du restaurant</h1>
         </div>
-        {saved && <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700">Saved</span>}
+        {saved && <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700">Enregistré</span>}
       </div>
 
       <form onSubmit={saveSettings} className="bg-white rounded-lg border border-stone-200 overflow-hidden shadow-sm">
@@ -100,7 +101,7 @@ function SettingsPage() {
               {logoUrl ? <img src={logoUrl} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xl font-bold text-stone-500">{name.slice(0, 1) || 'R'}</div>}
             </div>
             <div className="rounded-lg bg-white/90 px-4 py-2 backdrop-blur">
-              <p className="text-lg font-semibold text-stone-950">{name || 'Restaurant name'}</p>
+              <p className="text-lg font-semibold text-stone-950">{name || 'Nom du restaurant'}</p>
               <p className="text-sm text-stone-500">{overview.restaurant?.cuisine}</p>
             </div>
           </div>
@@ -108,24 +109,24 @@ function SettingsPage() {
 
         <div className="grid gap-6 p-6 lg:grid-cols-[1.2fr_.8fr]">
           <div className="space-y-4">
-            <p className="font-semibold text-stone-900">Profile</p>
+            <p className="font-semibold text-stone-900">Profil</p>
             <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
             <div>
-              <label className="text-xs font-medium text-stone-500">Average ticket price ($)</label>
+              <label className="text-xs font-medium text-stone-500">Ticket moyen (DA)</label>
               <input value={avgTicketPrice} onChange={(e) => setAvgTicketPrice(e.target.value)} className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <ImageField label="Logo image" value={logoUrl} onChange={setLogoUrl} onFile={(file) => setImageFromFile(file, setLogoUrl)} />
-              <ImageField label="Cover image" value={coverImageUrl} onChange={setCoverImageUrl} onFile={(file) => setImageFromFile(file, setCoverImageUrl)} />
+              <ImageField label="Logo" value={logoUrl} onChange={setLogoUrl} onFile={(file) => setImageFromFile(file, setLogoUrl)} />
+              <ImageField label="Image de couverture" value={coverImageUrl} onChange={setCoverImageUrl} onFile={(file) => setImageFromFile(file, setCoverImageUrl)} />
             </div>
           </div>
 
           <div className="space-y-3">
-            <p className="font-semibold text-stone-900">Opening hours</p>
+            <p className="font-semibold text-stone-900">Horaires d'ouverture</p>
             {DAYS.map((d) => (
               <div key={d} className="grid grid-cols-[42px_1fr_1fr] items-center gap-2 text-sm">
-                <span className="uppercase text-stone-500">{d}</span>
+                <span className="uppercase text-stone-500">{DAY_LABELS[d]}</span>
                 <input
                   type="time"
                   value={hours[d]?.[0]?.open ?? ''}
@@ -140,7 +141,7 @@ function SettingsPage() {
                 />
               </div>
             ))}
-            <button className="inline-flex items-center gap-2 rounded-lg bg-stone-950 px-4 py-2 text-sm font-medium text-white hover:bg-stone-800"><Save className="h-4 w-4" /> Save settings</button>
+            <button className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white hover:bg-stone-800"><Save className="h-4 w-4" /> Enregistrer les paramètres</button>
           </div>
         </div>
       </form>
@@ -161,15 +162,15 @@ function SettingsPage() {
         <ChevronRight className="h-4 w-4 shrink-0 text-stone-400" />
       </Link>
 
-      <div className="bg-white rounded-lg border border-stone-200 p-6 space-y-3 shadow-sm">
-        <p className="font-semibold text-stone-900">Areas & tables</p>
+      <div className="space-y-3 rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-6">
+        <p className="font-semibold text-stone-900">Espaces et tables</p>
         {overview.areas.map((area) => (
           <div key={area.id} className="rounded-lg border border-stone-100 p-3">
             <p className="text-sm font-medium text-stone-700">{area.name}</p>
             <ul className="mt-2 space-y-1">
               {overview.tables.filter((t) => t.areaId === area.id).map((t) => (
                 <li key={t.id} className="flex items-center justify-between text-sm text-stone-600">
-                  <span>{t.label} — seats {t.capacity} ({t.shape})</span>
+                  <span>{t.label} — {t.capacity} place(s) ({t.shape === 'square' ? 'carrée' : t.shape === 'round' ? 'ronde' : 'rectangulaire'})</span>
                   <button onClick={() => removeTable(t.id)} className="text-red-500 hover:text-red-700">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -180,36 +181,36 @@ function SettingsPage() {
         ))}
 
         <form onSubmit={createArea} className="flex gap-2 pt-2">
-          <input placeholder="New area name" value={newAreaName} onChange={(e) => setNewAreaName(e.target.value)} className="flex-1 px-3 py-2 rounded-lg border border-stone-300 text-sm" />
-          <button className="flex items-center gap-1 rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-700 hover:bg-stone-200"><Plus className="h-4 w-4" /> Area</button>
+          <input placeholder="Nom du nouvel espace" value={newAreaName} onChange={(e) => setNewAreaName(e.target.value)} className="min-h-11 min-w-0 flex-1 rounded-lg border border-stone-300 px-3 text-sm" />
+          <button className="flex min-h-11 items-center gap-1 rounded-lg bg-stone-100 px-3 text-sm text-stone-700 hover:bg-stone-200"><Plus className="h-4 w-4" /> Espace</button>
         </form>
 
-        <form onSubmit={createTable} className="flex gap-2 flex-wrap pt-2">
-          <select value={newTable.areaId} onChange={(e) => setNewTable({ ...newTable, areaId: Number(e.target.value) })} className="px-3 py-2 rounded-lg border border-stone-300 text-sm">
+        <form onSubmit={createTable} className="grid grid-cols-2 gap-2 pt-2 sm:flex sm:flex-wrap">
+          <select value={newTable.areaId} onChange={(e) => setNewTable({ ...newTable, areaId: Number(e.target.value) })} className="min-h-11 rounded-lg border border-stone-300 px-3 text-sm">
             {overview.areas.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
-          <input placeholder="Label" value={newTable.label} onChange={(e) => setNewTable({ ...newTable, label: e.target.value })} className="w-24 px-3 py-2 rounded-lg border border-stone-300 text-sm" />
-          <input type="number" min={1} value={newTable.capacity} onChange={(e) => setNewTable({ ...newTable, capacity: Number(e.target.value) })} className="w-20 px-3 py-2 rounded-lg border border-stone-300 text-sm" />
-          <select value={newTable.shape} onChange={(e) => setNewTable({ ...newTable, shape: e.target.value })} className="px-3 py-2 rounded-lg border border-stone-300 text-sm">
-            <option value="square">Square</option>
-            <option value="round">Round</option>
-            <option value="rect">Rect</option>
+          <input placeholder="Nom de table" value={newTable.label} onChange={(e) => setNewTable({ ...newTable, label: e.target.value })} className="min-h-11 min-w-0 rounded-lg border border-stone-300 px-3 text-sm sm:w-28" />
+          <input aria-label="Capacité" type="number" min={1} value={newTable.capacity} onChange={(e) => setNewTable({ ...newTable, capacity: Number(e.target.value) })} className="min-h-11 min-w-0 rounded-lg border border-stone-300 px-3 text-sm sm:w-24" />
+          <select value={newTable.shape} onChange={(e) => setNewTable({ ...newTable, shape: e.target.value })} className="min-h-11 rounded-lg border border-stone-300 px-3 text-sm">
+            <option value="square">Carrée</option>
+            <option value="round">Ronde</option>
+            <option value="rect">Rectangulaire</option>
           </select>
-          <button className="flex items-center gap-1 rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-700 hover:bg-stone-200"><Plus className="h-4 w-4" /> Table</button>
+          <button className="col-span-2 flex min-h-11 items-center justify-center gap-1 rounded-lg bg-stone-100 px-3 text-sm text-stone-700 hover:bg-stone-200 sm:col-span-1"><Plus className="h-4 w-4" /> Ajouter la table</button>
         </form>
       </div>
 
-      <form onSubmit={updatePassword} className="bg-white rounded-lg border border-stone-200 p-6 space-y-3 shadow-sm">
-        <p className="font-semibold text-stone-900 flex items-center gap-2"><KeyRound className="h-4 w-4" /> Owner password</p>
+      <form onSubmit={updatePassword} className="space-y-3 rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-6">
+        <p className="font-semibold text-stone-900 flex items-center gap-2"><KeyRound className="h-4 w-4" /> Mot de passe propriétaire</p>
         <div className="grid gap-3 sm:grid-cols-3">
-          <input required type="password" value={passwords.currentPassword} onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })} placeholder="Current password" className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" />
-          <input required type="password" value={passwords.newPassword} onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })} placeholder="New password" className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" />
-          <input required type="password" value={passwords.confirmPassword} onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })} placeholder="Confirm new password" className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" />
+          <input required type="password" value={passwords.currentPassword} onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })} placeholder="Mot de passe actuel" className="min-h-11 w-full rounded-lg border border-stone-300 px-3 text-sm" />
+          <input required type="password" value={passwords.newPassword} onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })} placeholder="Nouveau mot de passe" className="min-h-11 w-full rounded-lg border border-stone-300 px-3 text-sm" />
+          <input required type="password" value={passwords.confirmPassword} onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })} placeholder="Confirmer le mot de passe" className="min-h-11 w-full rounded-lg border border-stone-300 px-3 text-sm" />
         </div>
-        {passwordMessage && <p className={`text-sm ${passwordMessage.includes('updated') ? 'text-emerald-600' : 'text-red-600'}`}>{passwordMessage}</p>}
-        <button className="inline-flex items-center gap-2 rounded-lg bg-stone-950 px-4 py-2 text-sm font-medium text-white hover:bg-stone-800"><Save className="h-4 w-4" /> Change password</button>
+        {passwordMessage && <p className={`text-sm ${passwordMessage.includes('mis à jour') ? 'text-emerald-600' : 'text-red-600'}`}>{passwordMessage}</p>}
+        <button className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white hover:bg-stone-800"><Save className="h-4 w-4" /> Modifier le mot de passe</button>
       </form>
     </div>
   )
@@ -220,7 +221,7 @@ function ImageField({ label, value, onChange, onFile }: { label: string; value: 
     <div>
       <label className="text-xs font-medium text-stone-500">{label}</label>
       <div className="mt-1 flex gap-2">
-        <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="https://... or upload" className="min-w-0 flex-1 rounded-lg border border-stone-300 px-3 py-2 text-sm" />
+        <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="https://... ou importer" className="min-h-11 min-w-0 flex-1 rounded-lg border border-stone-300 px-3 text-sm" />
         <label className="inline-flex cursor-pointer items-center rounded-lg border border-stone-300 px-3 text-stone-600 hover:bg-stone-50">
           <Upload className="h-4 w-4" />
           <input type="file" accept="image/*" onChange={(e) => onFile(e.target.files?.[0])} className="sr-only" />
